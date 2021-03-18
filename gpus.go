@@ -36,9 +36,13 @@ func ParseAllocatedGPUs(sacctOutput []byte) float64 {
 		for _, line := range strings.Split(output, "\n") {
 			if len(line) > 0 {
 				line = strings.Trim(line, "\"")
-				descriptor := strings.TrimPrefix(line, "gpu:")
-				job_gpus, _ := strconv.ParseFloat(descriptor, 64)
-				num_gpus += job_gpus
+				for _, resource := range strings.Split(line, ",") {
+					if strings.HasPrefix(resource, "gres/gpu=") {
+						descriptor := strings.TrimPrefix(resource, "gres/gpu=")
+						job_gpus, _ := strconv.ParseFloat(descriptor, 64)
+						num_gpus += job_gpus
+					}
+				}
 			}
 		}
 	}
@@ -47,7 +51,7 @@ func ParseAllocatedGPUs(sacctOutput []byte) float64 {
 
 func GetAllocatedGPUs() float64 {
 	return ParseAllocatedGPUs(
-		Subprocess("sacct", "-a", "-X", "--format=Allocgres", "--state=RUNNING", "--noheader", "--parsable2"))
+		Subprocess("sacct", "-a", "-X", "--format=AllocTRES", "--state=RUNNING", "--noheader", "--parsable2"))
 }
 
 func ParseTotalGPUs(sinfoOutput []byte) float64 {
@@ -57,11 +61,17 @@ func ParseTotalGPUs(sinfoOutput []byte) float64 {
 		for _, line := range strings.Split(output, "\n") {
 			if len(line) > 0 {
 				line = strings.Trim(line, "\"")
-				descriptor := strings.Fields(line)[1]
-				descriptor = strings.TrimPrefix(descriptor, "gpu:")
-				descriptor = strings.Split(descriptor, "(")[0]
-				node_gpus, _ := strconv.ParseFloat(descriptor, 64)
-				num_gpus += node_gpus
+				gres := strings.Fields(line)[1]
+				// gres column format: comma-delimited list of resources
+				for _, resource := range strings.Split(gres, ",") {
+					if strings.HasPrefix(resource, "gpu:") {
+						// format: gpu:<type>:N(S:<something>), e.g. gpu:RTX2070:2(S:0)
+						descriptor := strings.Split(resource, ":")[2]
+						descriptor = strings.Split(descriptor, "(")[0]
+						node_gpus, _ := strconv.ParseFloat(descriptor, 64)
+						num_gpus += node_gpus
+					}
+				}
 			}
 		}
 	}
